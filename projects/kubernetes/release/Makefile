@@ -8,6 +8,8 @@ COMPONENT=kubernetes/release
 GO_RUNNER_IMAGE_COMPONENT?=kubernetes/go-runner
 KUBE_PROXY_BASE_IMAGE_COMPONENT?=kubernetes/kube-proxy-base
 
+KUBE_PROXY_BASE_BASE_IMAGE_NAME=$(if $(IS_BUILDING_MINIMAL),eks-distro-minimal-base-iptables,eks-distro-base)
+
 LICENSE_PACKAGE_FILTER=./go-runner.go
 IPTABLES_WRAPPER=$(OUTPUT_DIR)/iptables-wrapper
 
@@ -20,6 +22,8 @@ include $(BASE_DIRECTORY)/Common.mk
 
 
 $(call IMAGE_TARGETS_FOR_NAME, kube-proxy-base): $(IPTABLES_WRAPPER)
+$(call IMAGE_TARGETS_FOR_NAME, kube-proxy-base): IMAGE_TARGET=$(RELEASE_VARIANT)
+$(call IMAGE_TARGETS_FOR_NAME, kube-proxy-base): BASE_IMAGE_NAME=$(KUBE_PROXY_BASE_BASE_IMAGE_NAME)
 
 $(ATTRIBUTION_TARGET): fix-licenses
 

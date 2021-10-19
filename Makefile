@@ -16,6 +16,10 @@ OPEN_PR?=true
 RELEASE_GIT_TAG?=v$(RELEASE_BRANCH)-eks-$(RELEASE)
 RELEASE_GIT_COMMIT_HASH?=$(shell git rev-parse @)
 
+ifeq ($(RELEASE_VARIANT), minimal)
+	RELEASE:=$(RELEASE).minimal
+endif
+
 ifdef MAKECMDGOALS
 TARGET=$(MAKECMDGOALS)
 else
@@ -51,6 +55,7 @@ postsubmit-build: setup
 	go run cmd/main_postsubmit.go \
 		--target=release \
 		--release-branch=${RELEASE_BRANCH} \
+		--release-variant=${RELEASE_VARIANT} \
 		--release=${RELEASE} \
 		--region=${AWS_REGION} \
 		--account-id=${AWS_ACCOUNT_ID} \
@@ -64,12 +69,12 @@ kops-prow-arm: export NODE_ARCHITECTURE=arm64
 kops-prow-arm: postsubmit-build
 	$(eval MINOR_VERSION=$(subst 1-,,$(RELEASE_BRANCH)))
 	if [[ $(MINOR_VERSION) -ge 21 ]]; then \
-		development/kops/prow.sh; \
+		RELEASE=$(RELEASE) development/kops/prow.sh; \
 	fi;
 
 .PHONY: kops-prow-amd
 kops-prow-amd: postsubmit-build
-	development/kops/prow.sh
+	RELEASE=$(RELEASE) development/kops/prow.sh
 
 .PHONY: kops-prow
 kops-prow: kops-prow-amd kops-prow-arm

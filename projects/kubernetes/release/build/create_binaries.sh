@@ -24,5 +24,5 @@ OS="$3"
 ARCH="$4"
 
 CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH \
-	go build -trimpath -v -ldflags='-s -w --buildid=""' \
+	go build -trimpath -ldflags='-s -w --buildid=""' \
         -o $BIN_PATH/go-runner

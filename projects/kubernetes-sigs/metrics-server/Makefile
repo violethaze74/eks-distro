@@ -9,6 +9,8 @@ LICENSE_PACKAGE_FILTER=./cmd/metrics-server
 
 BINARY_TARGET=$(OUTPUT_BIN_DIR)/linux-amd64/metrics-server
 
+IMAGE_TARGET=$(RELEASE_VARIANT)
+
 include $(BASE_DIRECTORY)/Common.mk
 
 

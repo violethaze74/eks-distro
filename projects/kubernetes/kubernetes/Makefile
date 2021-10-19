@@ -13,9 +13,10 @@ KUBE_BASE_GIT_TAG?=$(shell cat $(BASE_DIRECTORY)/projects/kubernetes/release/$(R
 KUBE_BASE_TAG?=${KUBE_BASE_GIT_TAG}-eks-${RELEASE_BRANCH}-${RELEASE}
 GO_RUNNER_IMAGE?=$(IMAGE_REPO)/kubernetes/go-runner:$(KUBE_BASE_TAG)
 KUBE_PROXY_BASE_IMAGE?=$(IMAGE_REPO)/kubernetes/kube-proxy-base:$(KUBE_BASE_TAG)
-BUILDER_IMAGE=$(GO_RUNNER_IMAGE) # for pause
 
 PAUSE_SRC_DIR?=kubernetes/build/pause
+PAUSE_BASE_IMAGE=$(if $(IS_BUILDING_MINIMAL),eks-distro-minimal-base-nonroot,scratch)
+
 PAUSE_DST=_output/$(RELEASE_BRANCH)/pause/pause.c
 PAUSE_TAG+=$(IMAGE_TAG)
 PAUSE_TAGS=$(foreach tag, $(PAUSE_TAG), $(IMAGE_REPO)/kubernetes/pause:$(tag))
@@ -33,7 +34,6 @@ IMAGE_TARGETS=$(addsuffix /images/push, $(IMAGES))
 
 IMAGE_CONTEXT_DIR=$(OUTPUT_DIR)
 DOCKERFILE_FOLDER=./docker
-BASE_IMAGE=$(GO_RUNNER_IMAGE)
 IMAGE_BUILD_ARGS=BINARY PAUSE_VERSION
 BINARY=$(IMAGE_NAME)
 PAUSE_VERSION=$(IMAGE_TAG)
@@ -47,6 +47,7 @@ SIMPLE_CREATE_TARBALLS=false
 
 BINARY_TARGET=$(OUTPUT_BIN_DIR)/linux/amd64/kubelet
 GIT_PATCH_TARGET=$(REPO)/eks-distro-patched
+FIX_LICENSES_TARGET=$(OUTPUT_DIR)/attribution/root-module.txt
 
 include $(BASE_DIRECTORY)/Common.mk
 
@@ -61,7 +62,7 @@ $(BINARY_TARGET): MAKEFLAGS=
 $(BINARY_TARGET): | $(GIT_PATCH_TARGET)
 
 # There are a couple of fixes needed to the licenses and root-module name before running gather licenses
-$(GATHER_LICENSES_TARGET): fix-licenses
+$(GATHER_LICENSES_TARGET): | $(FIX_LICENSES_TARGET)
 
 # For kube proxy images, use the kube proxy base
 kube-proxy/images/%: BASE_IMAGE=$(KUBE_PROXY_BASE_IMAGE)
@@ -69,9 +70,11 @@ kube-proxy/images/%: BASE_IMAGE=$(KUBE_PROXY_BASE_IMAGE)
 # For pause change the dockerfile and base off scratch
 # wildcard match doesnt work for add pre-req so have to use helper
 pause/images/%: DOCKERFILE_FOLDER=./docker/pause
-pause/images/%: BASE_IMAGE=scratch
+pause/images/%: BASE_IMAGE_NAME=$(PAUSE_BASE_IMAGE)
 pause/images/%: IMAGE=$(PAUSE_IMAGE)
 $(call IMAGE_TARGETS_FOR_NAME, pause): $(PAUSE_DST)
+
+kube-apiserver/images/% kube-controller-manager/images/% kube-scheduler/images/%: BASE_IMAGE=$(GO_RUNNER_IMAGE)
 
 $(GIT_PATCH_TARGET): $(GIT_CHECKOUT_TARGET)
 	build/patch_repo.sh $(REPO) $(GIT_TAG) $(RELEASE_BRANCH)
@@ -103,13 +106,12 @@ upload-artifacts: s3-artifacts
 test: $(BINARY_TARGET)
 	build/run_tests.sh $(RELEASE_BRANCH) $(GOLANG_VERSION)
 
-.PHONY: fix-licenses
-fix-licenses:
+$(FIX_LICENSES_TARGET):
 	build/fix_licenses.sh $(REPO) $(OUTPUT_DIR)
 
 .PHONY: update-version
 update-version:
-	build/create_version_file.sh $(GIT_TAG) $(RELEASE_BRANCH) $(IMAGE_TAG)
+	build/create_version_file.sh $(GIT_TAG) $(RELEASE_BRANCH) $(IMAGE_TAG:.minimal=)
 
 .PHONY: validate-version-file
 validate-version-file: update-version

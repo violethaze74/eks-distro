@@ -36,6 +36,12 @@ then
   exit 0
 fi
 cd ${PREFIX_DIR}
+if [ RELEASE == *.minimal ]
+then
+  # For minimal releases do not touch CRDs/release channels
+  exit 0
+fi
+
 for CRD
 in *yaml
 do

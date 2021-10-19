@@ -7,6 +7,8 @@ RELEASE_BRANCH?=$(shell cat $(BASE_DIRECTORY)/release/DEFAULT_RELEASE_BRANCH)
 RELEASE_ENVIRONMENT?=development
 RELEASE?=$(shell cat $(BASE_DIRECTORY)/release/$(RELEASE_BRANCH)/$(RELEASE_ENVIRONMENT)/RELEASE)
 ARTIFACT_BUCKET?=my-s3-bucket
+RELEASE_VARIANT?=standard
+IS_BUILDING_MINIMAL=$(filter minimal, $(RELEASE_VARIANT))
 
 CLONE_URL=https://github.com/$(COMPONENT).git
 
@@ -24,10 +26,11 @@ ATTRIBUTION_TARGET=$(wildcard ATTRIBUTION.txt) $(wildcard $(RELEASE_BRANCH)/ATTR
 IMAGE_REPO?=$(if $(AWS_ACCOUNT_ID),$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com,localhost:5000)
 
 BASE_IMAGE_REPO?=public.ecr.aws/eks-distro-build-tooling
-BASE_IMAGE_NAME?=eks-distro-base
-BASE_IMAGE_TAG?=$(shell cat $(BASE_DIRECTORY)/EKS_DISTRO_BASE_TAG_FILE)
-BASE_IMAGE?=$(BASE_IMAGE_REPO)/$(BASE_IMAGE_NAME):$(BASE_IMAGE_TAG)
-BUILDER_IMAGE?=BASE_IMAGE
+BASE_IMAGE_NAME?=$(if $(IS_BUILDING_MINIMAL),eks-distro-minimal-base,eks-distro-base)
+BASE_IMAGE_TAG_FILE?=$(BASE_DIRECTORY)/$(shell echo $(BASE_IMAGE_NAME) | tr '[:lower:]' '[:upper:]' | tr '-' '_')_TAG_FILE
+BASE_IMAGE_TAG?=$(shell cat $(BASE_IMAGE_TAG_FILE))
+BASE_IMAGE?=$(if $(filter scratch,$(BASE_IMAGE_NAME)),scratch,$(BASE_IMAGE_REPO)/$(BASE_IMAGE_NAME):$(BASE_IMAGE_TAG))
+BUILDER_IMAGE?=$(BASE_IMAGE_REPO)/eks-distro-base:$(shell cat $(BASE_DIRECTORY)/EKS_DISTRO_BASE_TAG_FILE)
 
 IMAGE_COMPONENT?=$(COMPONENT)
 IMAGE_OUTPUT_DIR?=/tmp
@@ -36,6 +39,7 @@ IMAGE_OUTPUT_NAME?=$(IMAGE_NAME)
 # For projects with multiple containers this is defined to override the default
 IMAGE_COMPONENT_VARIABLE=$(shell echo '$(IMAGE_NAME)' | tr '[:lower:]' '[:upper:]' | tr '-' '_' )_IMAGE_COMPONENT
 IMAGE=$(IMAGE_REPO)/$(if $(value $(IMAGE_COMPONENT_VARIABLE)),$(value $(IMAGE_COMPONENT_VARIABLE)),$(IMAGE_COMPONENT)):$(IMAGE_TAG)
+IMAGE_TARGET=
 
 # This tag is overwritten in the prow job to point to the upstream git tag and this repo's commit hash
 IMAGE_TAG?=${GIT_TAG}-eks-${RELEASE_BRANCH}-${RELEASE}
@@ -66,6 +70,7 @@ define BUILDCTL
 		--progress plain \
 		--local dockerfile=$(DOCKERFILE_FOLDER) \
 		--local context=$(IMAGE_CONTEXT_DIR) \
+		--opt target=$(IMAGE_TARGET) \
 		--output type=$(IMAGE_OUTPUT_TYPE),oci-mediatypes=true,\"name=$(IMAGE)\",$(IMAGE_OUTPUT)
 endef
 

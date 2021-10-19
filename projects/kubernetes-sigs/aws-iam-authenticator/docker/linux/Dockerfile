@@ -12,12 +12,20 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+
 ARG BASE_IMAGE
-FROM $BASE_IMAGE
+ARG BUILDER_IMAGE
+
+FROM $BASE_IMAGE as base
+
+FROM $BUILDER_IMAGE as builder
 
 ARG TARGETARCH
 ARG TARGETOS
 ARG RELEASE_BRANCH
+
+COPY --from=base /etc/group /etc/group
+COPY --from=base /etc/passwd /etc/passwd
 
 RUN yum install -y shadow-utils && \
     adduser \
@@ -25,11 +33,27 @@ RUN yum install -y shadow-utils && \
     --no-create-home \
     --uid 10000 \
     aws-iam-authenticator && \
-    yum update -y
+	yum clean all && \
+    rm -rf /var/cache/yum
 
-COPY _output/LICENSES /LICENSES
-COPY $RELEASE_BRANCH/ATTRIBUTION.txt /ATTRIBUTION.txt
 COPY _output/bin/aws-iam-authenticator/$TARGETOS-$TARGETARCH/aws-iam-authenticator /
 RUN chown aws-iam-authenticator /aws-iam-authenticator
+COPY _output/LICENSES /LICENSES
+COPY $RELEASE_BRANCH/ATTRIBUTION.txt /ATTRIBUTION.txt
+
+FROM builder as standard
+
+USER aws-iam-authenticator
+ENTRYPOINT ["/aws-iam-authenticator"]
+
+
+FROM $BASE_IMAGE as minimal
+
+COPY --from=builder /etc/group /etc/group
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /aws-iam-authenticator /aws-iam-authenticator
+COPY --from=builder /LICENSES /LICENSES
+COPY --from=builder /ATTRIBUTION.txt /ATTRIBUTION.txt
+
 USER aws-iam-authenticator
 ENTRYPOINT ["/aws-iam-authenticator"]
